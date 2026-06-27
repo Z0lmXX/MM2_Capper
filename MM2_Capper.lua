@@ -116,7 +116,7 @@ mm2TabBtn.MouseButton1Click:Connect(function()
 	mm2TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	uniTabBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 	uniTabBtn.TextColor3 = Color3.fromRGB(150, 150, 155)
-	end)
+end)
 
 uniTabBtn.MouseButton1Click:Connect(function()
 	MM2Scroll.Visible = false
@@ -200,62 +200,6 @@ local function createActionButton(text, color, order, parentPage, callback)
 	corner.Parent = btn
 
 	btn.MouseButton1Click:Connect(callback)
-end
-
-local function createPureActionButtonField(text, defaultKey, order, parentPage, callback, keybindCallback)
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, -5, 0, 35)
-	frame.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
-	frame.BorderSizePixel = 0
-	frame.LayoutOrder = order
-	frame.Parent = parentPage
-
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.60, 0, 0.8, 0)
-	btn.Position = UDim2.new(0.03, 0, 0.1, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(110, 45, 45)
-	btn.Text = text
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 14
-	btn.Parent = frame
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = btn
-
-	local bindBtn = Instance.new("TextButton")
-	bindBtn.Size = UDim2.new(0.28, 0, 0.8, 0)
-	bindBtn.Position = UDim2.new(0.69, 0, 0.1, 0)
-	bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-	bindBtn.Text = "[" .. defaultKey.Name .. "]"
-	bindBtn.TextColor3 = Color3.fromRGB(220, 220, 225)
-	bindBtn.Font = Enum.Font.SourceSansBold
-	bindBtn.TextSize = 12
-	bindBtn.Parent = frame
-	
-	local bindCorner = Instance.new("UICorner")
-	bindCorner.CornerRadius = UDim.new(0, 4)
-	bindCorner.Parent = bindBtn
-
-	btn.MouseButton1Click:Connect(callback)
-
-	local listeningForBind = false
-	bindBtn.MouseButton1Click:Connect(function()
-		listeningForBind = true
-		bindBtn.Text = "..."
-		bindBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 85)
-	end)
-
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if not listeningForBind then return end
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			listeningForBind = false
-			bindBtn.Text = "[" .. input.KeyCode.Name .. "]"
-			bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-			if keybindCallback then keybindCallback(input.KeyCode) end
-		end
-	end)
 end
 
 local function createConfigurableToggle(text, defaultKey, order, parentPage, toggleCallback, keybindCallback)
@@ -607,12 +551,14 @@ local jumpPowerEnabled = false
 local hiddenfling = false
 local mm2EspEnabled = false
 local gunEspEnabled = false
+local triggerBotEnabled = false
 
 local flyKeybind = Enum.KeyCode.V
 local speedKeybind = Enum.KeyCode.R       
 local jumpKeybind = Enum.KeyCode.G        
 local tpKeybind = Enum.KeyCode.T
 local flingKeybind = Enum.KeyCode.X 
+local shootKeybind = Enum.KeyCode.Z 
 local gunTpKeybind = Enum.KeyCode.H
 
 local selectedTeleportTarget = nil
@@ -623,6 +569,7 @@ local jumpToggleButton = nil
 local flingToggleButton = nil
 local espToggleButton = nil
 local gunEspToggleButton = nil
+local triggerBotToggleButton = nil
 
 local flySpeedSliderHandle = nil
 local walkSpeedSliderHandle = nil
@@ -632,6 +579,7 @@ local flyConnection = nil
 local flingThread = nil
 local espRenderConnection = nil
 local gunEspConnection = nil
+local triggerBotConnection = nil
 
 local hasSavedPosition = false
 local savedPreTeleportCFrame = nil
@@ -908,6 +856,52 @@ local function toggleGunEspState(state)
 end
 
 -- =============================================================================
+-- TRIGGER BOT ENGINE (Automation Filter Logic)
+-- =============================================================================
+local function runTriggerBotPhysics()
+	if not triggerBotEnabled then return end
+	
+	local mouse = LocalPlayer:GetMouse()
+	local targetPart = mouse.Target
+	if not targetPart then return end
+	
+	-- Make sure we are actually holding the MM2 gun
+	local char = LocalPlayer.Character
+	local gun = char and (char:FindFirstChild("Gun") or char:FindFirstChild("Remington"))
+	if not gun then return end
+	
+	-- Verify target parent structure maps to a player model
+	local targetModel = targetPart.Parent
+	if targetModel:IsA("Accessory") then targetModel = targetModel.Parent end
+	
+	local targetPlayer = Players:GetPlayerFromCharacter(targetModel)
+	if targetPlayer and targetPlayer ~= LocalPlayer then
+		local role, _ = getPlayerMM2Role(targetPlayer)
+		if role == "Murderer" then
+			gun:Activate() -- Internal click mechanic execution
+			task.wait(0.3) -- Built-in safety cooldown to prevent weapon lock
+		end
+	end
+end
+
+local function toggleTriggerBotState(state)
+	triggerBotEnabled = state
+	if triggerBotToggleButton then
+		triggerBotToggleButton.Text = triggerBotEnabled and "ON" or "OFF"
+		triggerBotToggleButton.BackgroundColor3 = triggerBotEnabled and Color3.fromRGB(60, 180, 60) or Color3.fromRGB(180, 60, 60)
+	end
+	
+	if triggerBotEnabled then
+		triggerBotConnection = RunService.RenderStepped:Connect(runTriggerBotPhysics)
+	else
+		if triggerBotConnection then
+			triggerBotConnection:Disconnect()
+			triggerBotConnection = nil
+		end
+	end
+end
+
+-- =============================================================================
 -- PERFORMANCE EVENT-BASED NOTIFICATIONS & ANTI-CAMP TOGGLE MEMORY TRIGGER
 -- =============================================================================
 local function sendSystemNotification(title, text)
@@ -963,6 +957,63 @@ local function manualTeleportToGun()
 		sendSystemNotification("Anti-Camp", "Snapped to Gun! Press keybind again to recall instantly.")
 	else
 		sendSystemNotification("Capper Menu", "No dropped gun detected on map floors.")
+	end
+end
+
+-- =============================================================================
+-- RE-ENGINEERED MECHANIC: CFRAME-LOOK REPLICATION SILENT AIM
+-- =============================================================================
+local function runSilentAimShoot()
+	local myChar = LocalPlayer.Character
+	-- Ensure gun is equipped or grab it from backpack automatically
+	local myGun = myChar and (myChar:FindFirstChild("Gun") or myChar:FindFirstChild("Remington"))
+	if not myGun and LocalPlayer:FindFirstChild("Backpack") then
+		local inventoryGun = LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Remington")
+		if inventoryGun then
+			inventoryGun.Parent = myChar
+			myGun = inventoryGun
+			task.wait(0.05)
+		end
+	end
+	
+	if not myGun then
+		sendSystemNotification("Silent Aim Error", "You must have the Sheriff/Hero gun equipped to fire!")
+		return
+	end
+	
+	-- Track down the Murderer
+	local murdererPlayer = nil
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			local role, _ = getPlayerMM2Role(p)
+			if role == "Murderer" then
+				murdererPlayer = p
+				break
+			end
+		end
+	end
+	
+	if murdererPlayer and murdererPlayer.Character and murdererPlayer.Character:FindFirstChild("Head") then
+		local targetHead = murdererPlayer.Character.Head
+		local cam = workspace.CurrentCamera
+		
+		-- Store exactly where you were looking originally
+		local originalCamCFrame = cam.CFrame
+		
+		-- Snap camera focus vector natively to target head position
+		cam.CFrame = CFrame.new(cam.CFrame.Position, targetHead.Position)
+		task.wait(0.02) -- Tiny delay to ensure raycast updates to look vector
+		
+		-- Trigger gun tool activation natively inside engine
+		myGun:Activate()
+		
+		-- Instantly restore view angle back to player's natural perspective
+		task.wait(0.02)
+		cam.CFrame = originalCamCFrame
+		
+		sendSystemNotification("🎯 Silent Aim", "Accurate alignment fire shot at: " .. murdererPlayer.Name)
+	else
+		sendSystemNotification("🎯 Silent Aim", "Murderer not found or currently out of range.")
 	end
 end
 
@@ -1056,6 +1107,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		toggleJumpState(not jumpPowerEnabled)
 	elseif input.KeyCode == flingKeybind then
 		toggleFlingState(not hiddenfling)
+	elseif input.KeyCode == shootKeybind then
+		runSilentAimShoot()
 	elseif input.KeyCode == tpKeybind then
 		performTeleport()
 	elseif input.KeyCode == gunTpKeybind then
@@ -1096,12 +1149,17 @@ createPureKeybindField("Anti-Camp Gun Warp", gunTpKeybind, 5, MM2Scroll, functio
 	gunTpKeybind = newKey
 end)
 
-createHeader("-- Visual Legend Reference", 6, MM2Scroll)
-createLegendRow("Murderer Highlight Target Color -> RED", Color3.fromRGB(255, 50, 50), 7, MM2Scroll)
-createLegendRow("Sheriff Highlight Target Color -> BLUE", Color3.fromRGB(50, 80, 255), 8, MM2Scroll)
-createLegendRow("Hero (Gun Holder) Target Color -> YELLOW", Color3.fromRGB(255, 215, 0), 9, MM2Scroll)
-createLegendRow("Innocent Highlight Target Color -> GREEN", Color3.fromRGB(50, 255, 50), 10, MM2Scroll)
-createLegendRow("Dropped Gun Target Color -> PURPLE", Color3.fromRGB(148, 0, 211), 11, MM2Scroll)
+triggerBotToggleButton = createConfigurableToggle("Murderer Trigger Bot", nil, 6, MM2Scroll,
+	function(state) toggleTriggerBotState(state) end,
+	nil
+)
+
+createHeader("-- Visual Legend Reference", 7, MM2Scroll)
+createLegendRow("Murderer Highlight Target Color -> RED", Color3.fromRGB(255, 50, 50), 8, MM2Scroll)
+createLegendRow("Sheriff Highlight Target Color -> BLUE", Color3.fromRGB(50, 80, 255), 9, MM2Scroll)
+createLegendRow("Hero (Gun Holder) Target Color -> YELLOW", Color3.fromRGB(255, 215, 0), 10, MM2Scroll)
+createLegendRow("Innocent Highlight Target Color -> GREEN", Color3.fromRGB(50, 255, 50), 11, MM2Scroll)
+createLegendRow("Dropped Gun Target Color -> PURPLE", Color3.fromRGB(148, 0, 211), 12, MM2Scroll)
 
 -- =============================================================================
 -- 6. MENU DRAW MOUNTING (TAB 2: UNIVERSAL FEATURES)
