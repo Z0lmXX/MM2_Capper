@@ -1,11 +1,15 @@
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 
--- Put the username of the person you want to show the message to
-local targetUsername = "Player1" 
+-- Wait for the game to load fully before showing the error
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
-Players.PlayerAdded:Connect(function(player)
-    if player.Name == targetUsername then
-        -- This creates the native error screen with a "Leave" button
-        player:Kick("You have been banned from this game.")
-    end
-end)
+-- We use a slight delay so the player actually spawns in right before it hits
+task.wait(1)
+
+-- This forces Roblox to display the official connection error prompt
+-- The text will display your custom ban message, and the button will exit the game
+GuiService:SetErrorMessageGuiType(Enum.ErrorMessageGuiType.Default)
+Players.LocalPlayer:Kick("You have been banned from this game.")
